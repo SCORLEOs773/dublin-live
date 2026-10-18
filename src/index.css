@@ -1,0 +1,227 @@
+:root {
+  --ink: #05061a;
+  --text: #f1e9ff;
+  --muted: #b9b3d9;
+  --gold: #ffd98a;
+  --amber: #ffb347;
+  --font-display: "Marcellus", Georgia, serif;
+  --font-ui: "Instrument Sans", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-ui);
+  overflow: hidden;
+}
+:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+}
+.app > .map {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.brand {
+  position: fixed;
+  top: 18px;
+  left: 22px;
+  pointer-events: none;
+  text-shadow: 0 2px 18px rgba(5, 6, 26, 0.9);
+}
+.brand h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.9rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+.brand p {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.clock {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 18px 16px;
+  border-radius: 14px;
+  background: rgba(10, 8, 30, 0.72);
+  border: 1px solid rgba(255, 217, 138, 0.18);
+  backdrop-filter: blur(10px);
+  display: grid;
+  gap: 10px;
+}
+.clock-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.clock-time {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  color: var(--gold);
+}
+.clock-phase {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+.clock input[type="range"] {
+  width: 100%;
+  accent-color: var(--amber);
+}
+.live {
+  justify-self: start;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 217, 138, 0.35);
+  background: transparent;
+  color: var(--gold);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+.live:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.live:not(:disabled):hover {
+  background: rgba(255, 217, 138, 0.12);
+}
+
+.credit {
+  position: fixed;
+  left: 14px;
+  bottom: 8px;
+  margin: 0;
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.loader,
+.error {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--gold);
+  letter-spacing: 0.06em;
+}
+.loader {
+  background: var(--ink);
+  transition: opacity 1.2s ease;
+  z-index: 5;
+}
+.loader.hide {
+  opacity: 0;
+  pointer-events: none;
+}
+.error {
+  z-index: 6;
+  background: rgba(5, 6, 26, 0.9);
+}
+
+/* Landmark beacons */
+.beacon {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.beacon-core {
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: #fff1c2;
+  box-shadow:
+    0 0 12px 4px rgba(255, 200, 110, 0.85),
+    0 0 42px 14px rgba(255, 170, 80, 0.35);
+  animation: pulse 3.2s ease-in-out infinite;
+}
+.beacon-label {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: rgba(10, 8, 30, 0.82);
+  color: var(--gold);
+  font-size: 0.75rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+}
+.beacon:hover .beacon-label,
+.beacon:focus-visible .beacon-label {
+  opacity: 1;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+  }
+}
+
+/* Dark theme for the map's built-in controls (the attribution must stay visible) */
+.maplibregl-ctrl-group {
+  background: rgba(10, 8, 30, 0.75) !important;
+}
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon {
+  filter: invert(1);
+}
+.maplibregl-ctrl-attrib {
+  background: rgba(10, 8, 30, 0.6) !important;
+  color: var(--muted) !important;
+}
+.maplibregl-ctrl-attrib a {
+  color: #d9d3ff !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .beacon-core {
+    animation: none;
+  }
+  .loader {
+    transition: none;
+  }
+}
