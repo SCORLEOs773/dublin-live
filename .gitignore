@@ -26,3 +26,7 @@ dist-ssr
 # Secrets
 .env
 .env.*
+
+# Cloudflare Worker local files
+.wrangler/
+.dev.vars

@@ -7,9 +7,12 @@ import {
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "maplibre-gl/dist/maplibre-gl.css";
 import * as SunCalcModule from "suncalc";
-const SunCalc = SunCalcModule.default ?? SunCalcModule;
 import { paletteFor } from "./palette.js";
 import { LANDMARKS } from "./landmarks.js";
+import { createTrains } from "./trains.js";
+import { BOUNDS } from "./config.js";
+
+const SunCalc = SunCalcModule.default ?? SunCalcModule;
 
 setWorkerUrl(workerUrl);
 
@@ -26,10 +29,6 @@ const CITY_VIEW = {
   pitch: 68,
   bearing: -28,
 };
-const BOUNDS = [
-  [-6.6, 53.1],
-  [-5.9, 53.6],
-];
 
 const timeFormat = new Intl.DateTimeFormat("en-IE", {
   hour: "2-digit",
@@ -296,7 +295,10 @@ function addBeacons(map) {
   });
 }
 
-export async function createWorld(container, { onClock, onReady } = {}) {
+export async function createWorld(
+  container,
+  { onClock, onReady, onTrainCount, onTrainStatus, onTrainSelect } = {},
+) {
   const { id, source } = await loadSource();
 
   const map = new MapLibreMap({
@@ -312,6 +314,8 @@ export async function createWorld(container, { onClock, onReady } = {}) {
     canvasContextAttributes: { antialias: true },
   });
   map.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
+
+  // Print each different warning only once
   const seenWarnings = new Set();
   map.on("error", (e) => {
     const message = String(e.error?.message ?? e.error);
@@ -324,6 +328,7 @@ export async function createWorld(container, { onClock, onReady } = {}) {
   let offsetMin = 0;
   let frame = 0;
   let beacons = [];
+  let trains = null;
   let spin = false;
   let userTouched = false;
   let lastSpinTime = 0;
@@ -376,6 +381,16 @@ export async function createWorld(container, { onClock, onReady } = {}) {
     loaded = true;
     beacons = addBeacons(map);
     refresh();
+
+    trains = createTrains(map, {
+      onCount: onTrainCount,
+      onStatus: onTrainStatus,
+      onSelect: (info) => {
+        if (info) stopSpin();
+        onTrainSelect?.(info);
+      },
+    });
+
     onReady?.();
 
     // Cinematic arrival: from the bay down into the city centre
@@ -393,10 +408,17 @@ export async function createWorld(container, { onClock, onReady } = {}) {
       offsetMin = minutes;
       schedule();
     },
+    followTrain(on) {
+      trains?.setFollowing(on);
+    },
+    clearTrain() {
+      trains?.clear();
+    },
     destroy() {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(spinFrame);
       clearInterval(clockTimer);
+      trains?.destroy();
       beacons.forEach((b) => b.remove());
       map.remove();
     },
