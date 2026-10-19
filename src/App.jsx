@@ -11,6 +11,9 @@ export default function App() {
   const [trainCount, setTrainCount] = useState(null);
   const [trainStatus, setTrainStatus] = useState({ ok: true });
   const [train, setTrain] = useState(null);
+  const [bikeSummary, setBikeSummary] = useState(null);
+  const [bikeStatus, setBikeStatus] = useState({ ok: true });
+  const [station, setStation] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -22,6 +25,9 @@ export default function App() {
       onTrainCount: setTrainCount,
       onTrainStatus: setTrainStatus,
       onTrainSelect: setTrain,
+      onBikeSummary: setBikeSummary,
+      onBikeStatus: setBikeStatus,
+      onBikeSelect: setStation,
     })
       .then((w) => {
         if (cancelled) {
@@ -52,15 +58,21 @@ export default function App() {
 
   const live = offset === 0;
 
-  let pillText = "Listening for trains...";
-  if (!trainStatus.ok) pillText = trainStatus.message;
+  let trainText = "Listening for trains...";
+  if (!trainStatus.ok) trainText = trainStatus.message;
   else if (trainCount) {
     const { area, total } = trainCount;
     if (area > 0)
-      pillText = `${area} ${area === 1 ? "train" : "trains"} in the Dublin area`;
+      trainText = `${area} ${area === 1 ? "train" : "trains"} in the Dublin area`;
     else if (total > 0)
-      pillText = `No trains in the Dublin area right now (${total} elsewhere in Ireland)`;
-    else pillText = "No trains running right now";
+      trainText = `No trains in the Dublin area right now (${total} elsewhere in Ireland)`;
+    else trainText = "No trains running right now";
+  }
+
+  let bikeText = "Counting bikes...";
+  if (!bikeStatus.ok) bikeText = bikeStatus.message;
+  else if (bikeSummary) {
+    bikeText = `${bikeSummary.bikes.toLocaleString("en-IE")} bikes at ${bikeSummary.stations} stations`;
   }
 
   return (
@@ -73,9 +85,18 @@ export default function App() {
       </header>
 
       {ready && (
-        <div className={`pill ${trainStatus.ok ? "" : "warn"}`} role="status">
-          <span className="dot" />
-          {pillText}
+        <div className="pills">
+          <div className={`pill ${trainStatus.ok ? "" : "warn"}`} role="status">
+            <span className="dot" />
+            {trainText}
+          </div>
+          <div
+            className={`pill bike ${bikeStatus.ok ? "" : "warn"}`}
+            role="status"
+          >
+            <span className="dot" />
+            {bikeText}
+          </div>
         </div>
       )}
 
@@ -99,6 +120,27 @@ export default function App() {
           >
             {train.following ? "Stop following" : "Follow this train"}
           </button>
+        </aside>
+      )}
+
+      {station && (
+        <aside className="card" aria-live="polite">
+          <div className="card-head">
+            <span className="card-code">{station.name}</span>
+            <button
+              className="card-x"
+              onClick={() => worldRef.current?.clearBike()}
+              aria-label="Close station details"
+            >
+              ×
+            </button>
+          </div>
+          <p className="card-route">Dublinbikes station</p>
+          <p className="card-status">
+            {station.bikes} {station.bikes === 1 ? "bike" : "bikes"} ready (
+            {station.classic} classic, {station.ebikes} electric) ·{" "}
+            {station.docks} free {station.docks === 1 ? "dock" : "docks"}
+          </p>
         </aside>
       )}
 
@@ -134,6 +176,10 @@ export default function App() {
         </div>
       )}
 
+      <p className="sources">
+        Data: Iarnród Éireann, Dublin City Council (CC BY 4.0), OpenStreetMap
+        contributors
+      </p>
       <p className="credit">Made by Sukhad Sharma</p>
     </div>
   );

@@ -1,6 +1,14 @@
 const TRAINS_URL =
   "http://api.irishrail.ie/realtime/realtime.asmx/getCurrentTrainsXML";
-const CACHE_MS = 15000;
+const BIKE_INFO_URL =
+  "https://api.cyclocity.fr/contracts/dublin/gbfs/v2/station_information.json";
+const BIKE_STATUS_URL =
+  "https://api.cyclocity.fr/contracts/dublin/gbfs/v2/station_status.json";
+
+const TRAINS_CACHE_MS = 15000;
+const BIKES_CACHE_MS = 30000;
+const BIKE_INFO_CACHE_MS = 10 * 60 * 1000;
+const USER_AGENT = "dublin-live (portfolio project)";
 
 // Public, read-only data with no secrets, so any website may read it
 const CORS = {
@@ -9,8 +17,9 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-let cache = { at: 0, body: null };
-let inflight = null;
+// ---------- Trains ----------
+let trainsCache = { at: 0, body: null };
+let trainsInflight = null;
 
 const decode = (s) =>
   s
@@ -25,7 +34,6 @@ function tag(chunk, name) {
   return m ? decode(m[1].trim()) : "";
 }
 
-// Turn Irish Rail's XML into a simple list of running trains
 function parseTrains(xml) {
   return xml
     .split("<TrainStatus>")
@@ -41,7 +49,7 @@ function parseTrains(xml) {
     .filter(
       (t) =>
         t.code &&
-        t.status === "R" && // R = running
+        t.status === "R" &&
         Number.isFinite(t.lat) &&
         Number.isFinite(t.lng) &&
         t.lat !== 0 &&
@@ -50,31 +58,133 @@ function parseTrains(xml) {
 }
 
 async function getTrains() {
-  if (cache.body && Date.now() - cache.at < CACHE_MS) return cache.body;
+  if (trainsCache.body && Date.now() - trainsCache.at < TRAINS_CACHE_MS)
+    return trainsCache.body;
 
-  if (!inflight) {
-    inflight = fetch(TRAINS_URL, {
-      headers: { "User-Agent": "dublin-live (portfolio project)" },
+  if (!trainsInflight) {
+    trainsInflight = fetch(TRAINS_URL, {
+      headers: { "User-Agent": USER_AGENT },
     })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Upstream ${res.status}`);
         const trains = parseTrains(await res.text());
-        cache = {
+        trainsCache = {
           at: Date.now(),
           body: JSON.stringify({ updated: new Date().toISOString(), trains }),
         };
-        return cache.body;
+        return trainsCache.body;
       })
       .finally(() => {
-        inflight = null;
+        trainsInflight = null;
       });
   }
 
   try {
-    return await inflight;
+    return await trainsInflight;
   } catch (err) {
-    if (cache.body) return cache.body; // serve slightly old data rather than nothing
+    if (trainsCache.body) return trainsCache.body;
     throw err;
+  }
+}
+
+// ---------- Bikes ----------
+let bikesCache = { at: 0, body: null };
+let infoCache = { at: 0, stations: null };
+let bikesInflight = null;
+
+async function getJson(url) {
+  const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
+  if (!res.ok) throw new Error(`Upstream ${res.status}`);
+  return res.json();
+}
+
+// "CLARENDON ROW" -> "Clarendon Row"
+const titleCase = (name) =>
+  name
+    .toLowerCase()
+    .replace(
+      /(^|[\s/(.-]|'(?=[a-z]{2,}))([a-z])/g,
+      (m, p, c) => p + c.toUpperCase(),
+    );
+
+async function getStationInfo() {
+  if (infoCache.stations && Date.now() - infoCache.at < BIKE_INFO_CACHE_MS) {
+    return infoCache.stations;
+  }
+  const data = await getJson(BIKE_INFO_URL);
+  infoCache = { at: Date.now(), stations: data.data.stations };
+  return infoCache.stations;
+}
+
+async function getBikes() {
+  if (bikesCache.body && Date.now() - bikesCache.at < BIKES_CACHE_MS)
+    return bikesCache.body;
+
+  if (!bikesInflight) {
+    bikesInflight = Promise.all([getStationInfo(), getJson(BIKE_STATUS_URL)])
+      .then(([info, status]) => {
+        const byId = new Map(
+          status.data.stations.map((s) => [s.station_id, s]),
+        );
+        const stations = info
+          .map((i) => {
+            const s = byId.get(i.station_id);
+            if (!s) return null;
+            const electric =
+              s.vehicle_types_available?.find(
+                (v) => v.vehicle_type_id === "electrical",
+              )?.count ?? 0;
+            return {
+              id: i.station_id,
+              name: titleCase(i.name),
+              lat: i.lat,
+              lng: i.lon,
+              capacity: i.capacity,
+              bikes: s.num_bikes_available,
+              ebikes: electric,
+              docks: s.num_docks_available,
+              active: Boolean(s.is_installed && s.is_renting),
+            };
+          })
+          .filter((s) => s && s.active && s.capacity > 0);
+
+        bikesCache = {
+          at: Date.now(),
+          body: JSON.stringify({ updated: new Date().toISOString(), stations }),
+        };
+        return bikesCache.body;
+      })
+      .finally(() => {
+        bikesInflight = null;
+      });
+  }
+
+  try {
+    return await bikesInflight;
+  } catch (err) {
+    if (bikesCache.body) return bikesCache.body;
+    throw err;
+  }
+}
+
+// ---------- Routing ----------
+async function respond(load, what) {
+  try {
+    return new Response(await load(), {
+      headers: {
+        ...CORS,
+        "Content-Type": "application/json",
+        "Cache-Control": "public, max-age=10",
+      },
+    });
+  } catch {
+    return new Response(
+      JSON.stringify({ error: `${what} data is unavailable right now` }),
+      {
+        status: 502,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      },
+    );
   }
 }
 
@@ -84,25 +194,8 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
 
     const { pathname } = new URL(request.url);
-    if (pathname === "/api/trains") {
-      try {
-        return new Response(await getTrains(), {
-          headers: {
-            ...CORS,
-            "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=10",
-          },
-        });
-      } catch {
-        return new Response(
-          JSON.stringify({ error: "Train data is unavailable right now" }),
-          {
-            status: 502,
-            headers: { ...CORS, "Content-Type": "application/json" },
-          },
-        );
-      }
-    }
+    if (pathname === "/api/trains") return respond(getTrains, "Train");
+    if (pathname === "/api/bikes") return respond(getBikes, "Bike");
     return new Response("Dublin Live API", { headers: CORS });
   },
 };

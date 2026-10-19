@@ -10,6 +10,7 @@ import * as SunCalcModule from "suncalc";
 import { paletteFor } from "./palette.js";
 import { LANDMARKS } from "./landmarks.js";
 import { createTrains } from "./trains.js";
+import { createBikes } from "./bikes.js";
 import { BOUNDS } from "./config.js";
 
 const SunCalc = SunCalcModule.default ?? SunCalcModule;
@@ -297,7 +298,16 @@ function addBeacons(map) {
 
 export async function createWorld(
   container,
-  { onClock, onReady, onTrainCount, onTrainStatus, onTrainSelect } = {},
+  {
+    onClock,
+    onReady,
+    onTrainCount,
+    onTrainStatus,
+    onTrainSelect,
+    onBikeSummary,
+    onBikeStatus,
+    onBikeSelect,
+  } = {},
 ) {
   const { id, source } = await loadSource();
 
@@ -329,6 +339,7 @@ export async function createWorld(
   let frame = 0;
   let beacons = [];
   let trains = null;
+  let bikes = null;
   let spin = false;
   let userTouched = false;
   let lastSpinTime = 0;
@@ -382,11 +393,26 @@ export async function createWorld(
     beacons = addBeacons(map);
     refresh();
 
+    bikes = createBikes(map, {
+      onSummary: onBikeSummary,
+      onStatus: onBikeStatus,
+      onSelect: (info) => {
+        if (info) {
+          stopSpin();
+          trains?.clear();
+        }
+        onBikeSelect?.(info);
+      },
+    });
+
     trains = createTrains(map, {
       onCount: onTrainCount,
       onStatus: onTrainStatus,
       onSelect: (info) => {
-        if (info) stopSpin();
+        if (info) {
+          stopSpin();
+          bikes?.clear();
+        }
         onTrainSelect?.(info);
       },
     });
@@ -413,6 +439,9 @@ export async function createWorld(
     },
     clearTrain() {
       trains?.clear();
+    },
+    clearBike() {
+      bikes?.clear();
     },
     destroy() {
       cancelAnimationFrame(frame);
