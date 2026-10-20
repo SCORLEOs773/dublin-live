@@ -8,6 +8,10 @@ const BIKE_STATUS_URL =
 const TRAINS_CACHE_MS = 15000;
 const BIKES_CACHE_MS = 30000;
 const BIKE_INFO_CACHE_MS = 10 * 60 * 1000;
+const BUSES_URL =
+  "https://api.nationaltransport.ie/gtfsr/v2/Vehicles?format=json";
+const BUSES_CACHE_MS = 60000; // the NTA has a fair usage policy, so at most about one request a minute
+const AREA = { west: -7.0, south: 52.95, east: -5.85, north: 53.8 };
 const USER_AGENT = "dublin-live (portfolio project)";
 
 // Public, read-only data with no secrets, so any website may read it
@@ -167,6 +171,77 @@ async function getBikes() {
   }
 }
 
+// ---------- Buses ----------
+let busesCache = { at: 0, body: null };
+let busesInflight = null;
+
+const round5 = (n) => Math.round(n * 1e5) / 1e5;
+
+async function getBuses(env) {
+  if (!env.NTA_API_KEY) throw new Error("NTA_API_KEY is not set");
+  if (busesCache.body && Date.now() - busesCache.at < BUSES_CACHE_MS)
+    return busesCache.body;
+
+  if (!busesInflight) {
+    busesInflight = fetch(BUSES_URL, {
+      headers: { "x-api-key": env.NTA_API_KEY, "User-Agent": USER_AGENT },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`Upstream ${res.status}`);
+        const data = await res.json();
+        const now =
+          Number(data.header?.timestamp) || Math.floor(Date.now() / 1000);
+
+        const buses = [];
+        for (const entity of data.entity ?? []) {
+          const v = entity.vehicle;
+          const p = v?.position;
+          if (!p) continue;
+
+          const lat = Number(p.latitude);
+          const lng = Number(p.longitude);
+          if (
+            !(
+              lat > AREA.south &&
+              lat < AREA.north &&
+              lng > AREA.west &&
+              lng < AREA.east
+            )
+          )
+            continue;
+
+          const ts = Number(v.timestamp) || 0;
+          if (ts && now - ts > 600) continue; // skip buses that stopped reporting
+
+          const tripId = v.trip?.trip_id ?? "";
+          buses.push({
+            id: tripId || String(v.vehicle?.id ?? entity.id),
+            route: v.trip?.route_id ?? "",
+            start: v.trip?.start_time ?? "",
+            lat: round5(lat),
+            lng: round5(lng),
+          });
+        }
+
+        busesCache = {
+          at: Date.now(),
+          body: JSON.stringify({ updated: new Date().toISOString(), buses }),
+        };
+        return busesCache.body;
+      })
+      .finally(() => {
+        busesInflight = null;
+      });
+  }
+
+  try {
+    return await busesInflight;
+  } catch (err) {
+    if (busesCache.body) return busesCache.body;
+    throw err;
+  }
+}
+
 // ---------- Routing ----------
 async function respond(load, what) {
   try {
@@ -189,13 +264,14 @@ async function respond(load, what) {
 }
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     if (request.method === "OPTIONS")
       return new Response(null, { status: 204, headers: CORS });
 
     const { pathname } = new URL(request.url);
     if (pathname === "/api/trains") return respond(getTrains, "Train");
     if (pathname === "/api/bikes") return respond(getBikes, "Bike");
+    if (pathname === "/api/buses") return respond(() => getBuses(env), "Bus");
     return new Response("Dublin Live API", { headers: CORS });
   },
 };

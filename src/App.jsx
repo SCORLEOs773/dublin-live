@@ -14,6 +14,9 @@ export default function App() {
   const [bikeSummary, setBikeSummary] = useState(null);
   const [bikeStatus, setBikeStatus] = useState({ ok: true });
   const [station, setStation] = useState(null);
+  const [busCount, setBusCount] = useState(null);
+  const [busStatus, setBusStatus] = useState({ ok: true });
+  const [bus, setBus] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,6 +31,9 @@ export default function App() {
       onBikeSummary: setBikeSummary,
       onBikeStatus: setBikeStatus,
       onBikeSelect: setStation,
+      onBusCount: setBusCount,
+      onBusStatus: setBusStatus,
+      onBusSelect: setBus,
     })
       .then((w) => {
         if (cancelled) {
@@ -75,6 +81,15 @@ export default function App() {
     bikeText = `${bikeSummary.bikes.toLocaleString("en-IE")} bikes at ${bikeSummary.stations} stations`;
   }
 
+  let busText = "Looking for buses...";
+  if (!busStatus.ok) busText = busStatus.message;
+  else if (busCount !== null) {
+    busText =
+      busCount === 0
+        ? "No buses on the move right now"
+        : `${busCount.toLocaleString("en-IE")} ${busCount === 1 ? "bus" : "buses"} on the move`;
+  }
+
   return (
     <div className="app">
       <div ref={mapRef} className="map" />
@@ -89,6 +104,13 @@ export default function App() {
           <div className={`pill ${trainStatus.ok ? "" : "warn"}`} role="status">
             <span className="dot" />
             {trainText}
+          </div>
+          <div
+            className={`pill bus ${busStatus.ok ? "" : "warn"}`}
+            role="status"
+          >
+            <span className="dot" />
+            {busText}
           </div>
           <div
             className={`pill bike ${bikeStatus.ok ? "" : "warn"}`}
@@ -119,6 +141,40 @@ export default function App() {
             onClick={() => worldRef.current?.followTrain(!train.following)}
           >
             {train.following ? "Stop following" : "Follow this train"}
+          </button>
+        </aside>
+      )}
+
+      {bus && (
+        <aside className="card" aria-live="polite">
+          <div className="card-head">
+            <span className="card-code">
+              {bus.route ? `Bus ${bus.route}` : "Bus"}
+            </span>
+            <button
+              className="card-x"
+              onClick={() => worldRef.current?.clearBus()}
+              aria-label="Close bus details"
+            >
+              ×
+            </button>
+          </div>
+          <p className="card-route">
+            {bus.long ||
+              (bus.rawRoute
+                ? `Route ${bus.rawRoute}`
+                : "Service in the Dublin area")}
+          </p>
+          {bus.start && (
+            <p className="card-status">
+              Trip scheduled to start at {bus.start.slice(0, 5)}
+            </p>
+          )}
+          <button
+            className="live"
+            onClick={() => worldRef.current?.followBus(!bus.following)}
+          >
+            {bus.following ? "Stop following" : "Follow this bus"}
           </button>
         </aside>
       )}
@@ -177,8 +233,8 @@ export default function App() {
       )}
 
       <p className="sources">
-        Data: Iarnród Éireann, Dublin City Council (CC BY 4.0), OpenStreetMap
-        contributors
+        Data: Iarnród Éireann, National Transport Authority, Dublin City Council
+        (CC BY 4.0), OpenStreetMap contributors
       </p>
       <p className="credit">Made by Sukhad Sharma</p>
     </div>
