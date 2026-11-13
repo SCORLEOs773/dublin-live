@@ -7,7 +7,7 @@
 ![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)
 
-**Live demo:** [YOUR-SITE.pages.dev](https://YOUR-SITE.pages.dev) (replace with your deployed URL)
+**Live demo:** [Dublin Live](https://dublin-live.mykeyman777.workers.dev/)
 
 Dublin Live is an art-directed, real-time map of Dublin. It is deliberately not a journey planner and not a standard map. There are no labels or icons. Roads are glowing veins, buildings are dark glass in 3D, and everything that moves is a point of light: trains are golden comets, buses are lavender lanterns, and bike stations are twinkling fireflies. The sky, the colours and the moon follow the real position of the sun.
 
